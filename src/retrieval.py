@@ -1,6 +1,6 @@
 """Hybrid retrieval with explicit, inspectable scoring.
 
-score = 0.40 * semantic + 0.25 * lexical + 0.15 * salience + 0.20 * decay
+score = 0.35 * semantic + 0.30 * lexical + 0.15 * salience + 0.20 * decay
 
 Only active memories compete. Superseded/expired never enter the candidate set.
 """
@@ -14,6 +14,17 @@ from src.decay import decay_multiplier
 from src.embeddings import Embedder, cosine, lexical_overlap
 from src.memory_store import MemoryStore
 from src.models import Memory, MemoryStatus, ScoreBreakdown, utcnow
+
+
+def _keyword_boost(query: str, key: str, value: str) -> float:
+    """Give a bonus when query words appear directly in key or value."""
+    q_words = set(query.lower().split())
+    kv_words = set(key.lower().split()) | set(value.lower().split())
+    if not q_words:
+        return 0.0
+    overlap = q_words & kv_words
+    # Strong bonus for direct keyword hits
+    return min(1.0, len(overlap) / max(1, len(q_words)))
 
 
 class MemoryRetriever:
@@ -36,10 +47,15 @@ class MemoryRetriever:
                 lexical_overlap(query, memory.key),
                 lexical_overlap(query, memory.value),
             )
+            # Keyword boost helps when hash embeddings miss semantic similarity
+            kw_boost = _keyword_boost(query, memory.key, memory.value)
+            # Blend lexical with keyword boost (take the better signal)
+            effective_lexical = max(lexical, kw_boost)
+
             decay = decay_multiplier(memory, now)
             total = (
                 self.settings.semantic_weight * semantic
-                + self.settings.lexical_weight * lexical
+                + self.settings.lexical_weight * effective_lexical
                 + self.settings.salience_weight * memory.salience
                 + self.settings.decay_weight * decay
             )
@@ -49,7 +65,7 @@ class MemoryRetriever:
                     key=memory.key,
                     value=memory.value,
                     semantic=round(semantic, 4),
-                    lexical=round(lexical, 4),
+                    lexical=round(effective_lexical, 4),
                     salience=round(memory.salience, 4),
                     decay=round(decay, 4),
                     total=round(total, 4),

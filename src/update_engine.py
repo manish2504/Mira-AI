@@ -22,9 +22,18 @@ CLASSIFY_SYSTEM = """Classify the relationship between an EXISTING memory and a 
 Return JSON: {"decision": "duplicate|update|contradict|unrelated", "reason": "short"}
 
 - duplicate: same information, wording may differ
-- update: newer version of the same fact (e.g. still the employer, new company)
-- contradict: cannot both be currently true
-- unrelated: different facts; keep both active
+- update: newer version of the EXACT SAME fact (e.g. same employer field, new company)
+- contradict: cannot both be currently true about the EXACT SAME topic
+- unrelated: different facts that can coexist; keep both active
+
+CRITICAL RULES:
+- "favorite drink: coffee" and "liked beverage: banana shake" are UNRELATED (different keys = different facts).
+- "favorite drink: coffee" and "favorite drink: tea" are UPDATE (same key, new value).
+- "employer: Google" and "employer: Microsoft" are UPDATE (same key, new value).
+- "liked food: pizza" and "liked food: sushi" are UNRELATED (can like multiple things).
+- Two facts are only update/contradict if they refer to the EXACT SAME attribute
+  AND cannot logically coexist. Mere topical similarity (both about drinks, both
+  about sports) does NOT make them updates of each other.
 
 update and contradict both mean the old memory should be superseded.
 """
@@ -139,36 +148,55 @@ class MemoryUpdateEngine:
         return self.store.insert(memory)
 
     def _candidates(self, fact: ExtractedFact) -> list[Memory]:
+        # Only look for EXACT key matches in the same category first
         by_key = self.store.find_active_by_key(fact.category, fact.key)
         seen = {m.id for m in by_key}
+
+        # Also check same key in other categories (e.g. "favorite drink" stored
+        # under "preference" but new fact under "correction")
         extra = self.store.find_active_by_key_any_category(fact.key)
         for m in extra:
             if m.id not in seen:
                 by_key.append(m)
                 seen.add(m.id)
 
+        # Only add semantic similarity matches if they have very high key similarity
+        # (>= 0.85) to avoid false positives like "favorite drink" matching "liked beverage"
         fact_vec = self.embedder.embed(f"{fact.category} {fact.key}: {fact.value}")
         key_vec = self.embedder.embed(fact.key)
         for m in self.store.active():
             if m.id in seen:
                 continue
-            same_keyish = cosine(key_vec, self.embedder.embed(m.key)) >= 0.72
+            key_sim = cosine(key_vec, self.embedder.embed(m.key))
             value_sim = cosine(fact_vec, m.embedding)
-            if same_keyish or value_sim >= self.related_threshold:
+            # Require VERY high key similarity (0.85+) to consider as candidate
+            # This prevents "liked beverage" from matching "favorite drink"
+            if key_sim >= 0.85 or (key_sim >= 0.72 and value_sim >= 0.70):
                 by_key.append(m)
                 seen.add(m.id)
         return by_key
 
     def _relate(self, existing: Memory, fact: ExtractedFact) -> RelationDecision:
+        # Exact same key and value = duplicate
         if _norm(existing.value) == _norm(fact.value) and _norm(existing.key) == _norm(
             fact.key
         ):
             return RelationDecision.DUPLICATE
+
+        # Same normalized key but different value = potential update
+        # BUT only if it's a "singular" attribute (favorite, employer, etc.)
+        # Not for "liked" items which can accumulate
         if _norm(existing.key) == _norm(fact.key) and _norm(existing.value) != _norm(
             fact.value
         ):
+            # If the key starts with "liked" or "enjoys", these can coexist
+            norm_key = _norm(fact.key)
+            if norm_key.startswith("liked") or norm_key.startswith("enjoys"):
+                return RelationDecision.UNRELATED
+            # For singular attributes (favorite X, employer, name, etc.), it's an update
             return RelationDecision.UPDATE
 
+        # Different keys = likely unrelated, but ask LLM if available
         if self.llm is None:
             return RelationDecision.UNRELATED
 

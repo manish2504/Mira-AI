@@ -163,19 +163,47 @@ Recent turns still go in the prompt so the chat feels continuous; long-term fact
 
 Python 3.11+.
 
-```powershell
-cd "c:\Users\Vibha\Oncemore AI"
+### 1. Create and Activate Virtual Environment (.venv)
+
+**PowerShell (Windows):**
+\\powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
-```
+\*(If PowerShell shows a script execution error, run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process first)*
 
-Edit `.env` and set `OPENAI_API_KEY` for live Mira. You can use OpenAI or Google Gemini's **100% Free API** key from [aistudio.google.com](https://aistudio.google.com/app/apikey) (via Gemini's OpenAI-compatible endpoint). Leave it unset to use the offline demo / `COMPANION_PROVIDER=fake`.
+**Command Prompt / CMD (Windows):**
+\\cmd
+python -m venv .venv
+.\.venv\Scripts\activate.bat
+\
+**macOS / Linux:**
+\\ash
+python3 -m venv .venv
+source .venv/bin/activate
+\
+### 2. Install Dependencies
+\\powershell
+pip install -r requirements.txt
+\
+### 3. Environment Configuration
+\\powershell
+copy .env.example .env
+\
+Edit .env and set your free Gemini API key from [aistudio.google.com](https://aistudio.google.com/app/apikey):
+
+\\env
+GEMINI_API_KEY=AIzaSy...your_gemini_api_key
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+EMBEDDING_PROVIDER=local
+DATABASE_PATH=data/companion.db
+COMPANION_PROVIDER=gemini
+\
+*(To run offline without an API key, set COMPANION_PROVIDER=fake)*
 
 ## 13. How to run
 
-Live chat (OpenAI):
+Live chat (Google Gemini):
 
 ```powershell
 python -m src.main

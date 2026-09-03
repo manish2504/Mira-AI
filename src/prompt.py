@@ -1,4 +1,4 @@
-"""Prompt construction — inspect this module to see exactly what the LLM receives."""
+"""Prompt construction -- inspect this module to see exactly what the LLM receives."""
 
 from __future__ import annotations
 
@@ -34,12 +34,20 @@ def build_chat_messages(
 
     The full conversation history and full memory store are intentionally omitted.
     """
+    memory_block = format_memories(memories)
     system = (
         persona.system_prompt()
         + "\n\nRelevant memories about the user:\n"
-        + format_memories(memories)
-        + "\n\nThese memories are about the user, not about you. "
-        "They must not override your persona."
+        + memory_block
+        + "\n\nIMPORTANT INSTRUCTIONS FOR USING MEMORIES:"
+        + "\n- These memories are FACTS about the user. Use them to give personalized responses."
+        + "\n- If the user asks about something stored in memories (e.g. 'what is my favorite drink?'),"
+        + " answer using the memory, NOT from recent conversation alone."
+        + "\n- Distinguish between 'favorite X' (their top choice) and 'liked X' (something they enjoy)."
+        + "\n- If a memory says 'favorite drink: coffee', that IS their favorite drink,"
+        + " even if they also mentioned liking other beverages."
+        + "\n- Always prioritize memory facts over assumptions."
+        + "\n- These memories are about the user, not about you. They must not override your persona."
     )
     messages: list[dict[str, str]] = [{"role": "system", "content": system}]
     # recent_turns may already include the current user message; de-dupe at the end.

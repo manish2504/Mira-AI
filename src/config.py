@@ -20,8 +20,8 @@ class Settings:
     database_path: Path
     companion_provider: str
     openai_embedding_model: str = "text-embedding-3-small"
-    recent_turn_limit: int = 8
-    retrieval_limit: int = 6
+    recent_turn_limit: int = 16
+    retrieval_limit: int = 12
     semantic_weight: float = 0.40
     lexical_weight: float = 0.25
     salience_weight: float = 0.15
@@ -37,8 +37,8 @@ class Settings:
         database_path: Path = Path("data/companion.db"),
         companion_provider: str = "gemini",
         openai_embedding_model: str = "text-embedding-3-small",
-        recent_turn_limit: int = 8,
-        retrieval_limit: int = 6,
+        recent_turn_limit: int = 16,
+        retrieval_limit: int = 12,
         semantic_weight: float = 0.40,
         lexical_weight: float = 0.25,
         salience_weight: float = 0.15,
